@@ -1,0 +1,136 @@
+#!/bin/bash
+
+# Colors
+ESC_SEQ="\x1b["
+COL_RESET=$ESC_SEQ"39;49;00m" # reset color
+COL_RED=$ESC_SEQ"31;01m"
+COL_GREEN=$ESC_SEQ"32;01m"
+COL_YELLOW=$ESC_SEQ"33;01m"
+COL_BLUE=$ESC_SEQ"34;01m"
+COL_MAGENTA=$ESC_SEQ"35;01m"
+COL_CYAN=$ESC_SEQ"36;01m"
+
+Dir=~/Documents/itp/
+STARTSEC=$(date +%s)
+STARTHUMAN=$(date "+Start: %m-%d-%Y at %H:%M")
+STARTTIME="$STARTSEC\t$STARTHUMAN\t" # delimit with tabs!
+
+echo -en "${COL_GREEN}" # set color to green
+
+usage() {
+	echo -e "使い方: 'getitp [-lod] どこ+何 filename' \
+\n\toption '-l' to display list of files (no search term or filename) \
+\n\toption '-o' to overwrite file \
+\n\toption '-d' to display contents of file (filename only)$COL_RESET">&2 ; exit 1
+}
+
+echo_no_job(){
+	echo -e "No job with name '$1'. \
+\nType 'tracktime -l' to list jobs.$COL_RESET"
+}
+
+check_dir() {
+	if [ ! -d $Dir ]; then # if no itp directory
+		echo -e "Creating directory '$Dir'"
+		mkdir $Dir
+	fi
+}
+
+run_casper() {
+	check_dir
+	echo "searching itp.ne.jp for $1"
+	# casperjs /Users/collinjames/Documents/scripts/juushouLoop.js $1 > $Dir$2.csv
+	/usr/local/bin/casperjs /usr/local/juushouLoop.js $1 > $Dir$2.csv
+	echo "opening file $Dir$2.csv"
+	open $Dir$2.csv
+}
+
+overwrite() { # delete a job; pass it a filename which will be '$1'
+	switch=0
+	csv="$2.csv"
+	if [ -e $Dir$csv ]; then
+		while [ $switch == 0 ]; do
+			read -p "Overwrite $Dir$csv? yes/no: " del # get input from user
+			case $del in
+				"y" | "yes") # user types 'yes'
+					run_casper $1 $2
+					switch=1
+					;;
+				"n" | "no")
+					echo -e "Didn't overwrite anything, per your request.$COL_RESET"
+					# break
+					switch=1
+					;;
+				*)
+					switch=0
+					;;
+			esac
+		done
+	else
+		run_casper $1 $2
+	fi
+}
+
+# main case switch
+case $# in # number of arguments from command line
+  	1) # 1 argument
+		case $1 in
+		"-l")
+			check_dir
+			echo -e "List of files in $Dir:"
+			# list of files | remove .txt
+			# ls $Dir | awk '{ gsub(".csv",""); print }'
+			ls $Dir | grep '.csv'
+			;;
+		*) # if the argument starts with '-' besides '-l'
+			usage
+			;;
+		esac
+		;;
+  	2) # if there were two arguments (normal usage)
+		case $1 in
+		"-d") # any dash
+			if [[ ${2:(-4)} == ".csv" ]]; then
+				csv="$2"
+			else
+				csv="$2.csv"
+			fi
+			
+			# echo $Dir$csv
+			if [ ! -e $Dir$csv ]; then # if no file
+				echo -e "No such file '$2' in '$Dir'"
+			else
+				echo -en "${COL_RESET}"
+				less $Dir$csv
+			fi
+			;;
+		*)
+			if [ $( echo "$1" | grep -P '[\x80-\xFF]\+[\x80-\xFF]' ) ]; then # check that Japanese has been entered
+				overwrite $1 $2
+			else
+				# echo "type Japanese place + Japanese thing (i.e. 岡山県+ラーメン)"
+				usage
+			fi
+			;;
+		esac	
+		;;  
+	3) # if there were three arguments
+		case $1 in
+		"-o")
+			if [ $( echo "$2" | grep -P '[\x80-\xFF]\+[\x80-\xFF]' ) ]; then # check that Japanese has been entered
+				run_casper $2 $3
+			else
+				echo "type Japanese place + Japanese thing (i.e. 岡山県+ラーメン)"
+				usage
+			fi
+			;;
+		*) # any other dash
+			usage
+			;;
+		esac	
+		;;
+  *) # user just typed 'getitp'
+    	usage
+		;; 
+esac
+echo -en "${COL_RESET}"
