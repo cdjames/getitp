@@ -34,6 +34,13 @@ function replacePostSign (div_item) {
     return div_item;
 }
 
+// function switchItems(item_obj){
+//     var temp = item_obj.item1;
+//     item_obj.item1 = item_obj.item2;
+//     item_obj.item2 = temp;
+//     return 
+// }
+
 // var utils = require('utils');
 var casper = require("casper").create({
     // verbose: true,       // uncomment for testing
@@ -45,11 +52,11 @@ var casper = require("casper").create({
     onLoadError: function(){this.exit()} // this makes the script stop when the next page can't be loaded
 });
 
-
+/* variables */
 var upTo = [],
     length = 50,    // a high number to ensure that all pages are checked (hyogo had 30 pages)
-    divs,
-    search_term = EscapeSJIS(casper.cli.args[0]),
+    divs,           // main container for div tags on page
+    search_term = EscapeSJIS(casper.cli.args[0]), // run input through EscapeSJIS to make it readable
     i = 0; // set to zero to start at 1
 
 for(var x = 0; x < length; x++) { // creating a dummy array for the "each" function
@@ -60,85 +67,91 @@ casper.start();
 
 casper.then(function() {
     this.each(upTo, function(){ // will repeat as many times as upTo's length
-        i++;
+        i++; // equals 1 on first run
         // this.echo(search_term);
-        // this.thenOpen(('file:///Users/collinjames/Desktop/kagawa/itp' + i + '.html'), function() { // local or testing
-        this.thenOpen(('http://itp.ne.jp/result/?kw=' + search_term + '&dcad=31&sr=1&st=4&evdc=1&num=50&pg=' + i ), function() {
+        this.thenOpen(('file:///Users/collinjames/Documents/scripts/juushou/itp' + i + '.html'), function() { // local or testing
+        /* open the page */
+        // this.thenOpen(('http://itp.ne.jp/result/?kw=' + search_term + '&dcad=31&sr=1&st=4&evdc=1&num=50&pg=' + i ), function() {
+            /* get cruft out of page and put div tags into divs variable*/
             divs = this.evaluate(function() {
                 $('a.boxedLink').remove(); // get rid of garbage links
                 $('.inlineSmallHeader').remove(); // get rid of 'TEL'
+                /* get the stuff from the page and store it in variable */
                 return [].map.call(document.querySelectorAll('div.normalResultsBox'), function(div) {
+                    /* get the text from each div and map to an array that will be returned to divs variable */
                     return div.innerText;
                 });
             });
             if (divs.length == 0){ // got an error page
                 // this.echo('nothing'); //testing
                 this.exit();
-            } else { // get the info
+            } else { // page get succeeded; parse the info
                 // this.echo('divs='+divs+' yep');    // testing
-            
+                this.echo('会社名,住所番号,住所,電話番号,ファックス番号,イメール');
                 for(i=0; i<divs.length; i++){ // loop over each div item
                 //for(i=4; i<5; i++){
-                    if(divs[i].length == 0) { // if there's an empty div?
-                        continue; // go to next iteration of loop
-                    }
-                    
-                    var splitdivs = divs[i].split("\n"); // split the lines of the div
-                    if(i < (divs.length-1)) { var splitdivs2 = divs[i+1].split("\n"); }
-                    // var zipadd, zipadd2;
-                    for(x=0; x<splitdivs.length; x++){ //go through and delete empty array items
-                        if(splitdivs[x].length < 2){
-                            splitdivs.splice(x, 1);
-                            if (splitdivs2) {splitdivs2.splice(x, 1);}
-                            continue;
-                            //console.log("spliced!");
-                        }
-                    }
-                    
-                    splitdivs = splitAddress(splitdivs); // split the address part of the div
-                    if (splitdivs2) { splitdivs2 = splitAddress(splitdivs2); }
-
-                    splitdivs.splice(3, 0, ""); // add a blank field in 4th position
-                    if (splitdivs2) {splitdivs2.splice(3, 0, "");} // add a blank field in 4th position
-                    
-                    //for(y=0; x<splitdivs.length; x++){
-                    splitdivs[1] = replacePostSign(splitdivs[1]);
-                    if (splitdivs2) {splitdivs2[1] = replacePostSign(splitdivs2[1]);}
-
-                    // if (i < (divs.length-1)) { // look for fax numbers in duplicate addresses
-                    if (splitdivs2) { // look for fax numbers in duplicate addresses
-                        // if the name and address are the same
-                        if(splitdivs[0] == splitdivs2[0] && splitdivs[1] == splitdivs2[1]){
-                            if(splitdivs2[2].indexOf('F') == 0 && splitdivs[2].indexOf('F') == 0){ // if there's a fax number in the duplicate entry and main entry
-                                //splitdivs2[2] = splitdivs2[2].replace( /^F専 /, '' );
-                                splitdivs[3] = splitdivs[2] + '/' + splitdivs2[2]; // put the fax number in the main entry
-                                
-                            } else if(splitdivs2[2].indexOf('F') == 0){ // if there's a fax number in the duplicate entry
-                                //splitdivs2[2] = splitdivs2[2].replace( /^F専 /, '' );
-                                splitdivs[3] = splitdivs2[2]; // put the fax number in the main entry
-                                
-                            } else if(splitdivs[2].indexOf('F') == 0){ // if there's a fax number in the main entry
-                                //splitdivs[2] = splitdivs[2].replace( /^F専 /, '' );
-                                var tempdiv = splitdivs[2];
-                                // splitdivs[2] = splitdivs2[2];
-                                splitdivs[3] = tempdiv; // fax number
-                                splitdivs[2] = splitdivs2[2]; // telephone number
-                            } else { // 2 telephone numbers
-                                splitdivs[2] = splitdivs[2] + '/' + splitdivs2[2]
+                    var splitdivs, splitdivs2 = null;
+                    if(divs[i].length > 0) { // if div is not empty there's an empty div?                    
+                        splitdivs = divs[i].split("\n"); // split the lines of the div
+                        if(i < (divs.length-1)) { splitdivs2 = divs[i+1].split("\n"); }
+                        // var zipadd, zipadd2;
+                        for(x=0; x<splitdivs.length; x++){ //go through and delete empty array items
+                            if(splitdivs[x].length < 2){
+                                splitdivs.splice(x, 1); // remove 1 item starting at x
+                                if (splitdivs2) {splitdivs2.splice(x, 1);}
+                                // continue;
+                                //console.log("spliced!");
                             }
-                            divs[i+1]=""; // delete the duplicate entry in the actual divs array
-                        } else if(splitdivs[2].indexOf('F') == 0){ // if not duplicate, and a fax number
-                            //splitdivs[2] = splitdivs[2].replace( /F専 /, '' );
-                            splitdivs[3] = splitdivs[2];
-                            splitdivs[2] = ''; // means there is no telephone number
                         }
-                        // switch email and url
-                        var temp = splitdivs[5];
-                        splitdivs[5] = splitdivs[4];
-                        splitdivs[4] = temp;
-                    }
+                        
+                        splitdivs = splitAddress(splitdivs); // split the address part of the div
+                        if (splitdivs2) { splitdivs2 = splitAddress(splitdivs2); }
 
-                    this.echo(splitdivs.join(','));
+                        splitdivs.splice(3, 0, ""); // add a blank field in 4th position
+                        if (splitdivs2) {splitdivs2.splice(3, 0, "");} // add a blank field in 4th position
+                        
+                        //for(y=0; x<splitdivs.length; x++){
+                        splitdivs[1] = replacePostSign(splitdivs[1]);
+                        if (splitdivs2) {splitdivs2[1] = replacePostSign(splitdivs2[1]);}
+
+                        // if (i < (divs.length-1)) { // look for fax numbers in duplicate addresses
+                        if (splitdivs2) { // look for fax numbers in duplicate addresses
+                            // if the name and address are the same (1st and 2nd fields)
+                            if(splitdivs[0] == splitdivs2[0] && splitdivs[1] == splitdivs2[1]){
+                                /* if there's a fax number in the duplicate entry and main entry, that means there are 2 different
+                                    fax numbers, so put them both in the main entry */
+                                if(splitdivs2[2].indexOf('F') == 0 && splitdivs[2].indexOf('F') == 0){ 
+                                    //splitdivs2[2] = splitdivs2[2].replace( /^F専 /, '' );
+                                    splitdivs[3] = splitdivs[2] + '/' + splitdivs2[2]; // put the fax number in the main entry
+                                    
+                                } else if(splitdivs2[2].indexOf('F') == 0){ // if there's a fax number in the duplicate entry but not main
+                                    //splitdivs2[2] = splitdivs2[2].replace( /^F専 /, '' );
+                                    splitdivs[3] = splitdivs2[2]; // put the fax number in the main entry
+                                    
+                                } else if(splitdivs[2].indexOf('F') == 0){ // if there's a fax number in the main entry
+                                    //splitdivs[2] = splitdivs[2].replace( /^F専 /, '' );
+                                    /* switch the phone and fax fields */
+                                    var tempdiv = splitdivs[2]; // (fax)
+                                    // splitdivs[2] = splitdivs2[2];
+                                    splitdivs[3] = tempdiv; // fax number
+                                    splitdivs[2] = splitdivs2[2]; // telephone number
+                                } else { // 2 telephone numbers
+                                    splitdivs[2] = splitdivs[2] + '/' + splitdivs2[2]
+                                }
+                                divs[i+1]=""; // delete the duplicate entry in the actual divs array
+                            } else if(splitdivs[2].indexOf('F') == 0){ // if not duplicate, and a fax number
+                                //splitdivs[2] = splitdivs[2].replace( /F専 /, '' );
+                                splitdivs[3] = splitdivs[2];
+                                splitdivs[2] = ''; // means there is no telephone number
+                            }
+                            // switch email and url
+                            var temp = splitdivs[5];
+                            splitdivs[5] = splitdivs[4];
+                            splitdivs[4] = temp;
+                        }
+
+                        this.echo(splitdivs.join(','));
+                    }
                 }
             }
         });

@@ -10,7 +10,7 @@ COL_BLUE=$ESC_SEQ"34;01m"
 COL_MAGENTA=$ESC_SEQ"35;01m"
 COL_CYAN=$ESC_SEQ"36;01m"
 
-Dir=~/Documents/itp/
+Dir=~/Documents/scripts/juushou/itp/
 STARTSEC=$(date +%s)
 STARTHUMAN=$(date "+Start: %m-%d-%Y at %H:%M")
 STARTTIME="$STARTSEC\t$STARTHUMAN\t" # delimit with tabs!
@@ -39,8 +39,8 @@ check_dir() {
 run_casper() {
 	check_dir
 	echo "searching itp.ne.jp for $1"
-	# casperjs /Users/collinjames/Documents/scripts/juushouLoop.js $1 > $Dir$2.csv
-	/usr/local/bin/casperjs /usr/local/juushouLoop.js $1 > $Dir$2.csv
+	casperjs /Users/collinjames/Documents/scripts/juushou/juushouLoop.js $1 > $Dir$2.csv
+	# /usr/local/bin/casperjs /usr/local/juushouLoop.js $1 > $Dir$2.csv
 	echo "opening file $Dir$2.csv"
 	open $Dir$2.csv
 }
