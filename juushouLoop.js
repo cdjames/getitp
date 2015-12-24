@@ -66,9 +66,10 @@ for(var x = 0; x < length; x++) { // creating a dummy array for the "each" funct
 casper.start();
 
 casper.then(function() {
+    // this.echo(search_term);
+    // this.echo("hello");
     this.each(upTo, function(){ // will repeat as many times as upTo's length
         i++; // equals 1 on first run
-        // this.echo(search_term);
         this.thenOpen(('file:///Users/collinjames/Documents/scripts/juushou/itp' + i + '.html'), function() { // local or testing
         /* open the page */
         // this.thenOpen(('http://itp.ne.jp/result/?kw=' + search_term + '&dcad=31&sr=1&st=4&evdc=1&num=50&pg=' + i ), function() {
@@ -118,8 +119,8 @@ casper.then(function() {
                         if (splitdivs2) { // look for fax numbers in duplicate addresses
                             // if the name and address are the same (1st and 2nd fields)
                             if(splitdivs[0] == splitdivs2[0] && splitdivs[1] == splitdivs2[1]){
-                                /* if there's a fax number in the duplicate entry and main entry, that means there are 2 different
-                                    fax numbers, so put them both in the main entry */
+                                 // if there's a fax number in the duplicate entry and main entry, that means there are 2 different
+                                 //    fax numbers, so put them both in the main entry 
                                 if(splitdivs2[2].indexOf('F') == 0 && splitdivs[2].indexOf('F') == 0){ 
                                     //splitdivs2[2] = splitdivs2[2].replace( /^F専 /, '' );
                                     splitdivs[3] = splitdivs[2] + '/' + splitdivs2[2]; // put the fax number in the main entry
