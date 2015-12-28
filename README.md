@@ -1,11 +1,15 @@
 # GetItp
 
-A commandline program to 
+A commandline program to gather search data from `itp.ne.jp` and format it into a `.csv` file.
 
-## Build
+## Requirements
 
-On unix-like systems, call `make` from a terminal.
+Requires [`casper.js`](http://casperjs.org), which requires [`phantom.js`](http://phantomjs.org). Download and install based on the instructions at the previous links. This script assumes both are in `usr/local/bin`.
 
 ## Usage
 
-Call `./getitp` from a terminal or put `getitp` somewhere in your path (`/usr/local/bin`, `/opt/local/bin` on some systems).
+`getitp [-lod] どこ+何 filename` 
+	option '-l' to display list of files (no search term or filename) 
+	option '-o' to overwrite file 
+	option '-d' to display contents of file (filename only)
+Call `./getitp` with parameters from a terminal or put `getitp` somewhere in your path (`/usr/local/bin`, `/opt/local/bin` on some systems).

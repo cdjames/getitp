@@ -39,8 +39,8 @@ check_dir() {
 run_casper() {
 	check_dir
 	echo "searching itp.ne.jp for $1"
-	/usr/local/bin/casperjs /Users/collinjames/Documents/scripts/juushou/juushouLoop.js $1 > $Dir$2.csv
- # /usr/local/bin/casperjs /usr/local/juushouLoop.js $1 > $Dir$2.csv
+	# /usr/local/bin/casperjs /Users/collinjames/Documents/scripts/juushou/juushouLoop.js $1 > $Dir$2.csv
+ 	/usr/local/bin/casperjs /usr/local/lib/getitp/juushouLoop.js $1 > $Dir$2.csv
 	echo "opening file $Dir$2.csv"
 	open $Dir$2.csv
 }

@@ -1,3 +1,17 @@
+/*********************************************************************
+** Author: Collin James
+** Date: 12/27/2015
+** Version: 1.0
+** Description: A commandline program to gather search data from 
+** `itp.ne.jp` and format it into a `.csv` file. 
+*********************************************************************/
+
+/* Utility Japanese escaping functions from: */
+// Escape Codec Library: ecl.js (Ver.041208)
+//
+// Copyright (C) http://nurucom-archives.hp.infoseek.co.jp/digital/
+//
+
 EscapeSJIS=function(str){
     return str.replace(/[^*+.-9A-Z_a-z-]/g,function(s){
         var c=s.charCodeAt(0),m;
@@ -16,6 +30,8 @@ JCT11280=Function('var a="zKV33~jZ4zN=~ji36XazM93y!{~k2y!o~k0ZlW6zN?3Wz3W?{EKzK[
 
 JCT8836=JCT11280.substring(0,8836);
 
+
+/* Utility functions */
 function splitAddress(div) {
     var zipadd,
         div_array = div;
@@ -29,18 +45,23 @@ function splitAddress(div) {
     return div_array;
 }
 
-function replacePostSign (div_item) {
-    div_item = div_item.replace( /^〒/, '' ); // find and replace postal sign
+function removeText (div_item, search) {
+    div_item = div_item.replace( search, '' ); // remove text
     return div_item;
 }
 
-// function switchItems(item_obj){
-//     var temp = item_obj.item1;
-//     item_obj.item1 = item_obj.item2;
-//     item_obj.item2 = temp;
-//     return 
+/*********************************************************************
+** Description: 
+** Switch items; assumes an object with 2 items is passed
+*********************************************************************/
+// function switchItems(object){
+//     var temp = object.item1;
+//     object.item1 = object.item2;
+//     object.item2 = temp;
+//     return object;
 // }
 
+/* Initialize casper */
 // var utils = require('utils');
 var casper = require("casper").create({
     // verbose: true,       // uncomment for testing
@@ -53,84 +74,92 @@ var casper = require("casper").create({
 });
 
 /* variables */
-var upTo = [],
+var upTo = [],      // dummy array for each()
     length = 50,    // a high number to ensure that all pages are checked (hyogo had 30 pages)
     divs,           // main container for div tags on page
     search_term = EscapeSJIS(casper.cli.args[0]), // run input through EscapeSJIS to make it readable
     i = 0; // set to zero to start at 1
 
-for(var x = 0; x < length; x++) { // creating a dummy array for the "each" function
+for(var x = 0; x < length; x++) { // creating a dummy array for the "each()" function
     upTo.push("!");
 }
 
 casper.start();
 
+/* this code will run on casper.run() */
 casper.then(function() {
-    // this.echo(search_term);
-    // this.echo("hello");
+    // this.echo(search_term);  // testing
+    // this.echo("hello");      //testing
     this.each(upTo, function(){ // will repeat as many times as upTo's length
         i++; // equals 1 on first run
         this.thenOpen(('file:///Users/collinjames/Documents/scripts/juushou/itp' + i + '.html'), function() { // local or testing
         /* open the page */
         // this.thenOpen(('http://itp.ne.jp/result/?kw=' + search_term + '&dcad=31&sr=1&st=4&evdc=1&num=50&pg=' + i ), function() {
+            
             /* get cruft out of page and put div tags into divs variable*/
             divs = this.evaluate(function() {
                 $('a.boxedLink').remove(); // get rid of garbage links
                 $('.inlineSmallHeader').remove(); // get rid of 'TEL'
-                /* get the stuff from the page and store it in variable */
+                
+                /* get the text from each div and map to an array that will be returned to divs variable */
                 return [].map.call(document.querySelectorAll('div.normalResultsBox'), function(div) {
-                    /* get the text from each div and map to an array that will be returned to divs variable */
                     return div.innerText;
                 });
             });
+
             if (divs.length == 0){ // got an error page
-                // this.echo('nothing'); //testing
+                // this.echo('It appears you reached an error page. Exiting...'); // testing message
                 this.exit();
             } else { // page get succeeded; parse the info
                 // this.echo('divs='+divs+' yep');    // testing
+                /* Output the CSV headers */
                 this.echo('会社名,住所番号,住所,電話番号,ファックス番号,イメール');
-                for(i=0; i<divs.length; i++){ // loop over each div item
-                //for(i=4; i<5; i++){
-                    var splitdivs, splitdivs2 = null;
-                    if(divs[i].length > 0) { // if div is not empty there's an empty div?                    
+                
+                /* Loop over each div item; extract and format data and output it for use in CSV file */
+                for(i=0; i<divs.length; i++){
+                    var splitdivs,          // will hold the business's information
+                        splitdivs2 = null;  // will hold a duplicate field for some businesses (w/ fax number)
+                    if(divs[i].length > 0) { // if div is not empty, otherwise skip to the next one                    
                         splitdivs = divs[i].split("\n"); // split the lines of the div
+                        /* split the next div's lines if not the last item in loop */
                         if(i < (divs.length-1)) { splitdivs2 = divs[i+1].split("\n"); }
-                        // var zipadd, zipadd2;
-                        for(x=0; x<splitdivs.length; x++){ //go through and delete empty array items
+                        
+                        /* delete empty items in array */
+                        for(x=0; x<splitdivs.length; x++){
                             if(splitdivs[x].length < 2){
                                 splitdivs.splice(x, 1); // remove 1 item starting at x
                                 if (splitdivs2) {splitdivs2.splice(x, 1);}
-                                // continue;
-                                //console.log("spliced!");
                             }
                         }
                         
-                        splitdivs = splitAddress(splitdivs); // split the address part of the div
+                        /* The address is attached to the next field; split into its own field */
+                        splitdivs = splitAddress(splitdivs);
                         if (splitdivs2) { splitdivs2 = splitAddress(splitdivs2); }
 
-                        splitdivs.splice(3, 0, ""); // add a blank field in 4th position
-                        if (splitdivs2) {splitdivs2.splice(3, 0, "");} // add a blank field in 4th position
+                        /* add a blank field in 4th position */
+                        splitdivs.splice(3, 0, "");
+                        if (splitdivs2) {splitdivs2.splice(3, 0, "");}
                         
-                        //for(y=0; x<splitdivs.length; x++){
-                        splitdivs[1] = replacePostSign(splitdivs[1]);
-                        if (splitdivs2) {splitdivs2[1] = replacePostSign(splitdivs2[1]);}
+                        /* remove Japanese postal sign */
+                        splitdivs[1] = removeText(splitdivs[1], /^〒/);
+                        if (splitdivs2) {splitdivs2[1] = removeText(splitdivs2[1], /^〒/);}
 
-                        // if (i < (divs.length-1)) { // look for fax numbers in duplicate addresses
-                        if (splitdivs2) { // look for fax numbers in duplicate addresses
-                            // if the name and address are the same (1st and 2nd fields)
+                        /* look for fax numbers in duplicate addresses */
+                        if (splitdivs2) {
+                            /* if the name and address are the same (1st and 2nd fields) */
                             if(splitdivs[0] == splitdivs2[0] && splitdivs[1] == splitdivs2[1]){
-                                 // if there's a fax number in the duplicate entry and main entry, that means there are 2 different
-                                 //    fax numbers, so put them both in the main entry 
+                                 /* if there's a fax number in the duplicate entry and main entry, that means there are 2 different
+                                    fax numbers, so put them both in the main entry */
                                 if(splitdivs2[2].indexOf('F') == 0 && splitdivs[2].indexOf('F') == 0){ 
-                                    //splitdivs2[2] = splitdivs2[2].replace( /^F専 /, '' );
+                                    splitdivs2[2] = removeText(splitdivs2[2], /^F専 / );
                                     splitdivs[3] = splitdivs[2] + '/' + splitdivs2[2]; // put the fax number in the main entry
                                     
                                 } else if(splitdivs2[2].indexOf('F') == 0){ // if there's a fax number in the duplicate entry but not main
-                                    //splitdivs2[2] = splitdivs2[2].replace( /^F専 /, '' );
+                                    splitdivs2[2] = removeText(splitdivs2[2], /^F専 / );
                                     splitdivs[3] = splitdivs2[2]; // put the fax number in the main entry
                                     
                                 } else if(splitdivs[2].indexOf('F') == 0){ // if there's a fax number in the main entry
-                                    //splitdivs[2] = splitdivs[2].replace( /^F専 /, '' );
+                                    splitdivs[2] = removeText(splitdivs[2], /^F専 / );
                                     /* switch the phone and fax fields */
                                     var tempdiv = splitdivs[2]; // (fax)
                                     // splitdivs[2] = splitdivs2[2];
@@ -140,17 +169,18 @@ casper.then(function() {
                                     splitdivs[2] = splitdivs[2] + '/' + splitdivs2[2]
                                 }
                                 divs[i+1]=""; // delete the duplicate entry in the actual divs array
-                            } else if(splitdivs[2].indexOf('F') == 0){ // if not duplicate, and a fax number
-                                //splitdivs[2] = splitdivs[2].replace( /F専 /, '' );
+                            } else if(splitdivs[2].indexOf('F') == 0){ // if not duplicate, and a fax number (means there is no telephone number)
+                                splitdivs[2] = removeText(splitdivs[2], /^F専 / );
                                 splitdivs[3] = splitdivs[2];
-                                splitdivs[2] = ''; // means there is no telephone number
+                                splitdivs[2] = ''; // get rid of telephone number
                             }
-                            // switch email and url
+                            /* switch email and url for all entries*/
                             var temp = splitdivs[5];
                             splitdivs[5] = splitdivs[4];
                             splitdivs[4] = temp;
                         }
 
+                        /* output the completed CSV line (all the fields separated by commas) */
                         this.echo(splitdivs.join(','));
                     }
                 }
@@ -160,198 +190,3 @@ casper.then(function() {
 });
 
 casper.run(); // run the whole thing
-
-/* unused functions */
-
-//http://www.junoe.jp/downloads/itoh/enc_js.shtml
-// Escape Codec Library: ecl.js (Ver.041208)
-//
-// Copyright (C) http://nurucom-archives.hp.infoseek.co.jp/digital/
-//
-
-
-// EscapeEUCJP=function(str){
-//     return str.replace(/[^*+.-9A-Z_a-z-]/g,function(s){
-//         var c=s.charCodeAt(0);
-//         return (c<128?(c<16?"%0":"%")+c.toString(16):65376<c&&c<65440?"%8E%"+(c-65216).toString(16):(c=JCT8836.indexOf(s))<0?"%A1%A6":"%"+((c-(c%=94))/94+161).toString(16)+"%"+(c+161).toString(16)).toUpperCase()
-//     })
-// };
-
-// UnescapeEUCJP=function(str){
-//     return str.replace(/(%A[1-9A-F]|%[B-E][0-9A-F]|%F[0-9A-E]){2}|%8E%(A[1-9A-F]|[B-D][0-9A-F])|%[0-7][0-9A-F]/ig,function(s){
-//         var c=parseInt(s.substring(1),16);
-//         return c<161?String.fromCharCode(c<128?c:parseInt(s.substring(4),16)+65216):JCT8836.charAt((c-161)*94+parseInt(s.substring(4),16)-161)
-//     })
-// };
-
-// EscapeJIS7=function(str){
-//     var u=String.fromCharCode,ri=u(92,120,48,48,45,92,120,55,70),rj=u(65377,45,65439,93,43),
-//     H=function(c){
-//         return 41<c&&c<58&&44!=c||64<c&&c<91||95==c||96<c&&c<123?u(c):"%"+c.toString(16).toUpperCase()
-//     },
-//     I=function(s){
-//         var c=s.charCodeAt(0);
-//         return (c<16?"%0":"%")+c.toString(16).toUpperCase()
-//     },
-//     rI=new RegExp;rI.compile("[^*+.-9A-Z_a-z-]","g");
-//     return ("g"+str+"g").replace(RegExp("["+ri+"]+","g"),function(s){
-//         return "%1B%28B"+s.replace(rI,I)
-//     }).replace(RegExp("["+rj,"g"),function(s){
-//         var c,i=0,t="%1B%28I";while(c=s.charCodeAt(i++))t+=H(c-65344);return t
-//     }).replace(RegExp("[^"+ri+rj,"g"),function(s){
-//         var a,c,i=0,t="%1B%24B";while(a=s.charAt(i++))t+=(c=JCT8836.indexOf(a))<0?"%21%26":H((c-(c%=94))/94+33)+H(c+33);return t
-//     }).slice(8,-1)
-// };
-
-// UnescapeJIS7=function(str){
-//     var i=0,p,q,s="",u=String.fromCharCode,
-//     P=("%28B"+str.replace(/%49/g,"I").replace(/%1B%24%4[02]|%1B%24@/ig,"%1B%24B")).split(/%1B/i),
-//     I=function(s){
-//         return u(parseInt(s.substring(1),16))
-//     },
-//     J=function(s){
-//         return u((3==s.length?parseInt(s.substring(1),16):s.charCodeAt(0))+65344)
-//     },
-//     K=function(s){
-//         var l=s.length;
-//         return JCT8836.charAt(4<l?(parseInt(s.substring(1),16)-33)*94+parseInt(s.substring(4),16)-33:2<l?(37==(l=s.charCodeAt(0))?(parseInt(s.substring(1,3),16)-33)*94+s.charCodeAt(3):(l-33)*94+parseInt(s.substring(2),16))-33:(s.charCodeAt(0)-33)*94+s.charCodeAt(1)-33)
-//     },
-//     rI=new RegExp,rJ=new RegExp,rK=new RegExp;
-//     rI.compile("%[0-7][0-9A-F]","ig");rJ.compile("(%2[1-9A-F]|%[3-5][0-9A-F])|[!-_]","ig");
-//     rK.compile("(%2[1-9A-F]|%[3-6][0-9A-F]|%7[0-9A-E]){2}|(%2[1-9A-F]|%[3-6][0-9A-F]|%7[0-9A-E])[!-~]|[!-~](%2[1-9A-F]|%[3-6][0-9A-F]|%7[0-9A-E])|[!-~]{2}","ig");
-//     while(p=P[i++])s+="%24B"==(q=p.substring(0,4))?p.substring(4).replace(rK,K):"%28I"==q?p.substring(4).replace(rJ,J):p.replace(rI,I).substring(2);
-//     return s
-// };
-
-// EscapeJIS8=function(str){
-//     var u=String.fromCharCode,r=u(92,120,48,48,45,92,120,55,70,65377,45,65439,93,43),
-//     H=function(c){
-//         return 41<c&&c<58&&44!=c||64<c&&c<91||95==c||96<c&&c<123?u(c):"%"+c.toString(16).toUpperCase()
-//     },
-//     I=function(s){
-//         var c=s.charCodeAt(0);
-//         return (c<16?"%0":"%")+(c<128?c:c-65216).toString(16).toUpperCase()
-//     },
-//     rI=new RegExp;rI.compile("[^*+.-9A-Z_a-z-]","g");
-//     return ("g"+str+"g").replace(RegExp("["+r,"g"),function(s){
-//         return "%1B%28B"+s.replace(rI,I)
-//     }).replace(RegExp("[^"+r,"g"),function(s){
-//         var a,c,i=0,t="%1B%24B";while(a=s.charAt(i++))t+=(c=JCT8836.indexOf(a))<0?"%21%26":H((c-(c%=94))/94+33)+H(c+33);return t
-//     }).slice(8,-1)
-// };
-
-// UnescapeJIS8=function(str){
-//     var i=0,p,s="",
-//     P=("%28B"+str.replace(/%1B%24%4[02]|%1B%24@/ig,"%1B%24B")).split(/%1B/i),
-//     I=function(s){
-//         var c=parseInt(s.substring(1),16);
-//         return String.fromCharCode(c<128?c:c+65216)
-//     },
-//     K=function(s){
-//         var l=s.length;
-//         return JCT8836.charAt(4<l?(parseInt(s.substring(1),16)-33)*94+parseInt(s.substring(4),16)-33:2<l?(37==(l=s.charCodeAt(0))?(parseInt(s.substring(1,3),16)-33)*94+s.charCodeAt(3):(l-33)*94+parseInt(s.substring(2),16))-33:(s.charCodeAt(0)-33)*94+s.charCodeAt(1)-33)
-//     },
-//     rI=new RegExp,rK=new RegExp;
-//     rI.compile("%([0-7][0-9A-F]|A[1-9A-F]|[B-D][0-9A-F])","ig");
-//     rK.compile("(%2[1-9A-F]|%[3-6][0-9A-F]|%7[0-9A-E]){2}|(%2[1-9A-F]|%[3-6][0-9A-F]|%7[0-9A-E])[!-~]|[!-~](%2[1-9A-F]|%[3-6][0-9A-F]|%7[0-9A-E])|[!-~]{2}","ig");
-//     while(p=P[i++])s+="%24B"==p.substring(0,4)?p.substring(4).replace(rK,K):p.replace(rI,I).substring(2);
-//     return s
-// };
-
-// EscapeUnicode=function(str){
-//     return str.replace(/[^*+.-9A-Z_a-z-]/g,function(s){
-//         var c=s.charCodeAt(0);
-//         return (c<16?"%0":c<256?"%":c<4096?"%u0":"%u")+c.toString(16).toUpperCase()
-//     })
-// };
-
-// UnescapeUnicode=function(str){
-//     return str.replace(/%u[0-9A-F]{4}|%[0-9A-F]{2}/ig,function(s){
-//         return String.fromCharCode("0x"+s.substring(s.length/3))
-//     })
-// };
-
-// EscapeUTF7=function(str){
-//     var B="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".split(""),
-//     E=function(s){
-//         var c=s.charCodeAt(0);
-//         return B[c>>10]+B[c>>4&63]+B[(c&15)<<2|(c=s.charCodeAt(1))>>14]+(0<=c?B[c>>8&63]+B[c>>2&63]+B[(c&3)<<4|(c=s.charCodeAt(2))>>12]+(0<=c?B[c>>6&63]+B[c&63]:""):"")
-//     },
-//     re=new RegExp;re.compile("[^+]{1,3}","g");
-//     return (str+"g").replace(/[^*+.-9A-Z_a-z-]+[*+.-9A-Z_a-z-]|[+]/g,function(s){
-//         if("+"==s)return "+-";
-//         var l=s.length-1,w=s.charAt(l);
-//         return "+"+s.substring(0,l).replace(re,E)+("+"==w?"-+-":"*"==w||"."==w||"_"==w?w:"-"+w)
-//     }).slice(0,-1)
-// };
-
-// UnescapeUTF7=function(str){
-//     var i=0,B={};
-//     while(i<64)B["ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".charAt(i)]=i++;
-//     return str.replace(RegExp("[+][+/-9A-Za-z]*-?","g"),function(s){
-//         if("+-"==s)return "+";
-//         var b=B[s.charAt(1)],c,i=1,t="";
-//         while(0<=b){
-//             if((c=i&7)<6)c=c<3?b<<10|B[s.charAt(++i)]<<4|(b=B[s.charAt(++i)])>>2:(b&3)<<14|B[s.charAt(++i)]<<8|B[s.charAt(++i)]<<2|(b=B[s.charAt(++i)])>>4;
-//             else{c=(b&15)<<12|B[s.charAt(++i)]<<6|B[s.charAt(++i)];b=B[s.charAt(++i)]}
-//             if(c)t+=String.fromCharCode(c)
-//         }
-//         return t
-//     })
-// };
-
-// EscapeUTF8=function(str){
-//     return str.replace(/[^*+.-9A-Z_a-z-]/g,function(s){
-//         var c=s.charCodeAt(0);
-//         return (c<16?"%0"+c.toString(16):c<128?"%"+c.toString(16):c<2048?"%"+(c>>6|192).toString(16)+"%"+(c&63|128).toString(16):"%"+(c>>12|224).toString(16)+"%"+(c>>6&63|128).toString(16)+"%"+(c&63|128).toString(16)).toUpperCase()
-//     })
-// };
-
-// UnescapeUTF8=function(str){
-//     return str.replace(/%(E(0%[AB]|[1-CEF]%[89AB]|D%[89])[0-9A-F]|C[2-9A-F]|D[0-9A-F])%[89AB][0-9A-F]|%[0-7][0-9A-F]/ig,function(s){
-//         var c=parseInt(s.substring(1),16);
-//         return String.fromCharCode(c<128?c:c<224?(c&31)<<6|parseInt(s.substring(4),16)&63:((c&15)<<6|parseInt(s.substring(4),16)&63)<<6|parseInt(s.substring(7),16)&63)
-//     })
-// };
-
-// EscapeUTF16LE=function(str){
-//     var H=function(c){
-//         return 41<c&&c<58&&44!=c||64<c&&c<91||95==c||96<c&&c<123?String.fromCharCode(c):(c<16?"%0":"%")+c.toString(16).toUpperCase()
-//     };
-//     return str.replace(/[^ ]| /g,function(s){
-//         var c=s.charCodeAt(0);return H(c&255)+H(c>>8)
-//     })
-// };
-
-// UnescapeUTF16LE=function(str){
-//     var u=String.fromCharCode,b=u(92,120,48,48,45,92,120,70,70);
-//     return str.replace(/^%FF%FE/i,"").replace(RegExp("%[0-9A-F]{2}%[0-9A-F]{2}|%[0-9A-F]{2}["+b+"]|["+b+"]%[0-9A-F]{2}|["+b+"]{2}","ig"),function(s){
-//         var l=s.length;
-//         return u(4<l?"0x"+s.substring(4,6)+s.substring(1,3):2<l?37==(l=s.charCodeAt(0))?parseInt(s.substring(1,3),16)|s.charCodeAt(3)<<8:l|parseInt(s.substring(2),16)<<8:s.charCodeAt(0)|s.charCodeAt(1)<<8)
-//     })
-// };
-
-// GetEscapeCodeType=function(str){
-//     if(/%u[0-9A-F]{4}/i.test(str))return "Unicode";
-//     if(/%([0-9A-DF][0-9A-F]%[8A]0%|E0%80|[0-7][0-9A-F]|C[01])%[8A]0|%00|%[7F]F/i.test(str))return "UTF16LE";
-//     if(/%E[0-9A-F]%[8A]0%[8A]0|%[CD][0-9A-F]%[8A]0/i.test(str))return "UTF8";
-//     if(/%F[DE]/i.test(str))return /%8[0-9A-D]|%9[0-9A-F]|%A0/i.test(str)?"UTF16LE":"EUCJP";
-//     if(/%1B/i.test(str))return /%[A-D][0-9A-F]/i.test(str)?"JIS8":"JIS7";
-//     var S=str.substring(0,6143).replace(/%[0-9A-F]{2}|[^ ]| /ig,function(s){
-//         return s.length<3?"40":s.substring(1)
-//     }),c,C,i=0,T;
-//     while(0<=(c=parseInt(S.substring(i,i+=2),16))&&i<4092)if(128<=c){
-//         if((C=parseInt(S.substring(i,i+2),16))<128)i+=2;
-//         else if(194<=c&&c<240&&C<192){
-//             if(c<224){T="UTF8";i+=2;continue}
-//             if(2==parseInt(S.charAt(i+2),16)>>2){T="UTF8";i+=4;continue}
-//         }
-//         if(142==c&&161<=C&&C<224){if(!T)T="EUCJP";if("EUCJP"==T)continue}
-//         if(c<161)return "SJIS";
-//         if(c<224&&!T)
-//             if((164==c&&C<244||165==c&&C<247)&&161<=C)i+=2;
-//             else T=224<=C?"EUCJP":"SJIS";
-//         else T="EUCJP"
-//     }
-//     return T?T:"EUCJP"
-// };
