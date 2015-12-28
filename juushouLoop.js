@@ -92,9 +92,10 @@ casper.then(function() {
     // this.echo("hello");      //testing
     this.each(upTo, function(){ // will repeat as many times as upTo's length
         i++; // equals 1 on first run
-        this.thenOpen(('file:///Users/collinjames/Documents/scripts/juushou/itp' + i + '.html'), function() { // local or testing
+        var count = i; // for use inside first if block
+        // this.thenOpen(('file:///Users/collinjames/Documents/scripts/juushou/itp' + i + '.html'), function() { // local or testing
         /* open the page */
-        // this.thenOpen(('http://itp.ne.jp/result/?kw=' + search_term + '&dcad=31&sr=1&st=4&evdc=1&num=50&pg=' + i ), function() {
+        this.thenOpen(('http://itp.ne.jp/result/?kw=' + search_term + '&dcad=31&sr=1&st=4&evdc=1&num=50&pg=' + i ), function() {
             
             /* get cruft out of page and put div tags into divs variable*/
             divs = this.evaluate(function() {
@@ -112,8 +113,8 @@ casper.then(function() {
                 this.exit();
             } else { // page get succeeded; parse the info
                 // this.echo('divs='+divs+' yep');    // testing
-                /* Output the CSV headers */
-                this.echo('会社名,住所番号,住所,電話番号,ファックス番号,イメール');
+                /* Output the CSV headers in first row */
+                if (count == 1) { this.echo('会社名,住所番号,住所,電話番号,ファックス番号,イメール,ホームページ'); }
                 
                 /* Loop over each div item; extract and format data and output it for use in CSV file */
                 for(i=0; i<divs.length; i++){
@@ -123,6 +124,7 @@ casper.then(function() {
                         splitdivs = divs[i].split("\n"); // split the lines of the div
                         /* split the next div's lines if not the last item in loop */
                         if(i < (divs.length-1)) { splitdivs2 = divs[i+1].split("\n"); }
+                        else { splitdivs2 = divs[0].split("\n"); }
                         
                         /* delete empty items in array */
                         for(x=0; x<splitdivs.length; x++){
@@ -150,15 +152,15 @@ casper.then(function() {
                             if(splitdivs[0] == splitdivs2[0] && splitdivs[1] == splitdivs2[1]){
                                  /* if there's a fax number in the duplicate entry and main entry, that means there are 2 different
                                     fax numbers, so put them both in the main entry */
-                                if(splitdivs2[2].indexOf('F') == 0 && splitdivs[2].indexOf('F') == 0){ 
+                                if(splitdivs2[2].indexOf('F専') == 0 && splitdivs[2].indexOf('F専') == 0){ 
                                     splitdivs2[2] = removeText(splitdivs2[2], /^F専 / );
                                     splitdivs[3] = splitdivs[2] + '/' + splitdivs2[2]; // put the fax number in the main entry
                                     
-                                } else if(splitdivs2[2].indexOf('F') == 0){ // if there's a fax number in the duplicate entry but not main
+                                } else if(splitdivs2[2].indexOf('F専') == 0){ // if there's a fax number in the duplicate entry but not main
                                     splitdivs2[2] = removeText(splitdivs2[2], /^F専 / );
                                     splitdivs[3] = splitdivs2[2]; // put the fax number in the main entry
                                     
-                                } else if(splitdivs[2].indexOf('F') == 0){ // if there's a fax number in the main entry
+                                } else if(splitdivs[2].indexOf('F専') == 0){ // if there's a fax number in the main entry
                                     splitdivs[2] = removeText(splitdivs[2], /^F専 / );
                                     /* switch the phone and fax fields */
                                     var tempdiv = splitdivs[2]; // (fax)
@@ -169,10 +171,14 @@ casper.then(function() {
                                     splitdivs[2] = splitdivs[2] + '/' + splitdivs2[2]
                                 }
                                 divs[i+1]=""; // delete the duplicate entry in the actual divs array
-                            } else if(splitdivs[2].indexOf('F') == 0){ // if not duplicate, and a fax number (means there is no telephone number)
+                            } else if(splitdivs[2].indexOf('F専') == 0){ // if not duplicate, and a sole fax number (means there is no telephone number)
                                 splitdivs[2] = removeText(splitdivs[2], /^F専 / );
                                 splitdivs[3] = splitdivs[2];
                                 splitdivs[2] = ''; // get rid of telephone number
+                            } else if(splitdivs[2].indexOf('F兼') == 0){ // if not duplicate, and a fax number (TEL is same # as fax)
+                                splitdivs[2] = removeText(splitdivs[2], /^F兼 / );
+                                splitdivs[3] = splitdivs[2];
+                                // splitdivs[2] = ''; // get rid of telephone number
                             }
                             /* switch email and url for all entries*/
                             var temp = splitdivs[5];
